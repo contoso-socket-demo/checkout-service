@@ -1,0 +1,81 @@
+# Items 3 and 8: run BOTH scan modes against the same tree so the demo can
+# show the contrast side by side in the dashboard.
+#
+#   Job "tier2"  -> socket scan create            (precomputed reachability)
+#   Job "tier1"  -> socket scan create --reach    (Coana call-graph analysis)
+#
+# Why this repo carries the reachability story:
+# Tier 2 ONLY ever resolves TRANSITIVE dependency CVEs. A direct dependency
+# always reports `direct_dependency` and stays permanently unresolved, no
+# matter which package it is. That is a product ceiling, not a tuning knob.
+# So the shape here deliberately parks most CVE volume in the transitive tree
+# under spring-boot-starter-web:1.5.10.RELEASE (jackson-databind 2.8.10,
+# tomcat-embed-core, hibernate-validator, spring-web/webmvc), while keeping
+# a small number of genuinely-reachable direct packages.
+#
+# Measured on the source repo this was ported from: ~61% Tier 2 and ~82%
+# Tier 1 noise reduction, 42 critical CVEs of which only 3 are reachable.
+# Re-verify after the first real scans here; the numbers are a property of
+# the scan, not of this file.
+#
+# The --reach-continue-on-* flags matter for unattended CI. Without them the
+# CLI HALTS on an install or analysis error. Known real failures in this
+# tree: xerces:xercesImpl fails to install, and tomcat-embed-core plus
+# spring-webmvc return undeterminable_reachability. With the flags, those
+# fall back to Tier 2 instead of killing the run.
+name: socket-scans
+
+on:
+  schedule:
+    - cron: '40 2,14 * * *'
+  workflow_dispatch:
+
+jobs:
+  tier2:
+    name: scan without --reach (Tier 2)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm install -g socket
+      - name: socket scan create
+        env:
+          SOCKET_SECURITY_API_TOKEN: ${{ secrets.SOCKET_SECURITY_API_TOKEN }}
+        run: |
+          socket scan create \
+            --org contoso --repo checkout-service \
+            --branch main --commit-hash "$GITHUB_SHA" \
+            --no-interactive .
+
+  tier1:
+    name: scan with --reach (Tier 1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm install -g socket
+
+      - name: Remove any retained facts file
+        # .socket.facts.json is RETAINED between runs. A stale one silently
+        # feeds last run's reachability results into this scan.
+        run: rm -f .socket.facts.json
+
+      - name: socket scan create --reach
+        env:
+          SOCKET_SECURITY_API_TOKEN: ${{ secrets.SOCKET_SECURITY_API_TOKEN }}
+        run: |
+          socket scan create \
+            --org contoso --repo checkout-service \
+            --branch main --commit-hash "$GITHUB_SHA" \
+            --reach \
+            --reach-continue-on-install-errors \
+            --reach-continue-on-analysis-errors \
+            --reach-analysis-timeout 2400 \
+            --no-interactive .
