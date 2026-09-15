@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.DEMO_PUSH_TOKEN }}
+          token: ${{ secrets.DEMO_PUSH_TOKEN || github.token }}
       - run: |
           set -euo pipefail
           git config user.name  "contoso-ci"
