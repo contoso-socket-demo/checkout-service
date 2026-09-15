@@ -30,11 +30,32 @@ small number of genuinely reachable direct packages.
 | Dead-code call paths only | `xstream`, `commons-collections` |
 | Declared, never touched | `snakeyaml`, `spring-core`, `guava`, `commons-beanutils`, `commons-fileupload`, `bcprov`/`bcpkix`, `velocity`, `dom4j`, `fastjson` |
 
-Measured on the source repo: **~61% Tier 2 and ~82% Tier 1** noise reduction,
-42 critical CVEs of which only 3 are genuinely reachable.
+Measured on the first real scans in this repo, 2026-09-15, 233 CVE alerts
+in both modes:
 
-Re-verify after the first real scans here. Those numbers are a property of
-the scan, not of this file.
+| Verdict | Tier 2 | Tier 1 |
+|---|---|---|
+| unreachable | 117 (50.2%) | **166 (71.2%)** |
+| `direct_dependency` | 61 (26.2%) | 0 |
+| undeterminable | 40 (17.2%) | 40 (17.2%) |
+| `maybe_reachable` | 3 (1.3%) | 0 |
+| reachable | 0 | **19 (8.2%)** |
+| missing_support / pending / error | 12 (5.2%) | 8 (3.4%) |
+
+**Noise reduction: 50.2% Tier 2, 71.2% Tier 1.**
+
+The source repo this was ported from measured ~61% / ~82%. This repo measures
+lower. The composition is identical, so the delta is Coana version drift
+(15.10.40 here) plus new CVEs published against the same packages since. Use
+the numbers above, not the older ones.
+
+**The strongest demo line is the `direct_dependency` row.** Tier 2 leaves 61
+CVEs (26.2%) permanently unresolved because it cannot reason about direct
+dependencies at all. Tier 1 resolves every one of them, which is the cleanest
+observable difference between the two tiers.
+
+Second strongest: Tier 1 confirms only **19 of 233** CVE alerts are actually
+reachable.
 
 ## Known analysis limits
 
